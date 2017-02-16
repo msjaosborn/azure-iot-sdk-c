@@ -89,7 +89,7 @@ MOCKABLE_FUNCTION(, int, device_start_async, DEVICE_HANDLE, handle, SESSION_HAND
 MOCKABLE_FUNCTION(, int, device_stop, DEVICE_HANDLE, handle);
 MOCKABLE_FUNCTION(, void, device_do_work, DEVICE_HANDLE, handle);
 MOCKABLE_FUNCTION(, int, device_send_event_async, DEVICE_HANDLE, handle, IOTHUB_MESSAGE_LIST*, message, ON_DEVICE_D2C_EVENT_SEND_COMPLETE, on_device_d2c_event_send_complete_callback, void*, context);
-MOCKABLE_FUNCTION(, int, device_get_send_status, DEVICE_HANDLE, handle, DEVICE_SEND_STATUS, *send_status);
+MOCKABLE_FUNCTION(, int, device_get_send_status, DEVICE_HANDLE, handle, DEVICE_SEND_STATUS*, send_status);
 MOCKABLE_FUNCTION(, int, device_subscribe_message, DEVICE_HANDLE, handle, ON_DEVICE_C2D_MESSAGE_RECEIVED, on_message_received_callback, void*, context);
 MOCKABLE_FUNCTION(, int, device_unsubscribe_message, DEVICE_HANDLE, handle);
 MOCKABLE_FUNCTION(, int, device_set_retry_policy, DEVICE_HANDLE, handle, IOTHUB_CLIENT_RETRY_POLICY, policy, size_t, retry_timeout_limit_in_seconds);

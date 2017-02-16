@@ -17,6 +17,7 @@
 #define DEFAULT_INCOMING_WINDOW_SIZE UINT_MAX
 #define DEFAULT_OUTGOING_WINDOW_SIZE 100
 #define SASL_IO_OPTION_LOG_TRACE "logtrace"
+#define DEFAULT_UNIQUE_ID_LENGTH 40
 
 typedef struct AMQP_CONNECTION_INSTANCE_TAG
 {
@@ -32,7 +33,6 @@ typedef struct AMQP_CONNECTION_INSTANCE_TAG
 	ON_AMQP_CONNECTION_STATE_CHANGED on_state_changed_callback;
 	const void* on_state_changed_context;
 } AMQP_CONNECTION_INSTANCE;
-
 
 static int create_sasl_components(AMQP_CONNECTION_INSTANCE* instance)
 {
@@ -105,10 +105,9 @@ static void on_connection_state_changed(void* context, CONNECTION_STATE new_conn
 {
 	AMQP_CONNECTION_INSTANCE* instance = (AMQP_CONNECTION_INSTANCE*)context;
 
+	// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_063: [If `on_connection_state_changed` is called back, `instance->on_state_changed_callback` shall be invoked, if defined, only if the new state is different than the previous]
 	if (new_connection_state != previous_connection_state)
 	{
-		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_063: [If `on_connection_state_changed` is called back, `instance->on_state_changed_callback` shall be invoked, if defined, only if the new state is different than the previous]
-
 		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_064: [If `on_connection_state_changed` new state is CONNECTION_STATE_OPENED, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_OPENED]
 		if (new_connection_state == CONNECTION_STATE_OPENED)
 		{
@@ -144,7 +143,12 @@ static int create_connection_handle(AMQP_CONNECTION_INSTANCE* instance)
 		connection_io_transport = instance->underlying_io_transport;
 	}
 
-	if (UniqueId_Generate(unique_container_id, 16) != UNIQUEID_OK)
+	if ((unique_container_id = (char*)malloc(sizeof(char) * DEFAULT_UNIQUE_ID_LENGTH)) == NULL)
+	{
+		result = __LINE__;
+		LogError("failed creating the AMQP connection (failed creating unique ID container)");
+	}
+	else if (UniqueId_Generate(unique_container_id, DEFAULT_UNIQUE_ID_LENGTH) != UNIQUEID_OK)
 	{
 		result = __FAILURE__;
 		LogError("failed creating the AMQP connection (UniqueId_Generate failed)");
@@ -235,7 +239,7 @@ static int create_cbs_handle(AMQP_CONNECTION_INSTANCE* instance)
 	int result;
 
 	// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_029: [`instance->cbs_handle` shall be created using cbs_create(), passing `instance->session_handle` and `on_cbs_state_changed` callback]
-	if ((instance->cbs_handle = cbs_create(instance->session_handle, on_cbs_state_changed, (void*)instance)) == NULL)
+	if ((instance->cbs_handle = cbs_create(instance->session_handle, NULL, (void*)instance)) == NULL)
 	{
 		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_030: [If cbs_create() fails, amqp_connection_create() shall fail and return NULL]
 		result = __FAILURE__;
