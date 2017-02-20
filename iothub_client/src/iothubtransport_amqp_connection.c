@@ -146,12 +146,12 @@ static int create_connection_handle(AMQP_CONNECTION_INSTANCE* instance)
 	if ((unique_container_id = (char*)malloc(sizeof(char) * DEFAULT_UNIQUE_ID_LENGTH)) == NULL)
 	{
 		result = __LINE__;
-		LogError("failed creating the AMQP connection (failed creating unique ID container)");
+		LogError("Failed creating the AMQP connection (failed creating unique ID container)");
 	}
 	else if (UniqueId_Generate(unique_container_id, DEFAULT_UNIQUE_ID_LENGTH) != UNIQUEID_OK)
 	{
 		result = __FAILURE__;
-		LogError("failed creating the AMQP connection (UniqueId_Generate failed)");
+		LogError("Failed creating the AMQP connection (UniqueId_Generate failed)");
 	}
 	// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_019: [`instance->connection_handle` shall be created using connection_create2(), passing the `connection_underlying_io`, `instance->iothub_host_fqdn` and an unique string as container ID]
 	// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_020: [connection_create2() shall also receive `on_connection_state_changed` and `on_connection_error` callback functions]
@@ -159,7 +159,7 @@ static int create_connection_handle(AMQP_CONNECTION_INSTANCE* instance)
 	{
 		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_021: [If connection_create2() fails, amqp_connection_create() shall fail and return NULL]
 		result = __FAILURE__;
-		LogError("failed creating the AMQP connection (connection_create2 failed)");
+		LogError("Failed creating the AMQP connection (connection_create2 failed)");
 	}
 	else
 	{
@@ -208,37 +208,11 @@ static int create_session_handle(AMQP_CONNECTION_INSTANCE* instance)
 	return result;
 }
 
-static void on_cbs_state_changed(void* context, AMQP_MANAGEMENT_STATE new_amqp_management_state, AMQP_MANAGEMENT_STATE previous_amqp_management_state)
-{
-	if (new_amqp_management_state != previous_amqp_management_state)
-	{
-		AMQP_CONNECTION_INSTANCE* instance = (AMQP_CONNECTION_INSTANCE*)context;
-
-		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_068: [If `on_cbs_state_changed` is called back, `instance->on_state_changed_callback` shall be invoked, if defined, only if the new state is different than the previous]
-
-		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_069: [If `on_cbs_state_changed` new state is AMQP_MANAGEMENT_STATE_OPEN, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_OPENED]
-		if (new_amqp_management_state == AMQP_MANAGEMENT_STATE_OPEN)
-		{
-			update_state(instance, AMQP_CONNECTION_STATE_OPENED);
-		}
-		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_070: [If `on_cbs_state_changed` new state is AMQP_MANAGEMENT_STATE_IDLE, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_CLOSED]
-		else if (new_amqp_management_state == AMQP_MANAGEMENT_STATE_IDLE)
-		{
-			update_state(instance, AMQP_CONNECTION_STATE_CLOSED);
-		}
-		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_073: [If `on_cbs_state_changed` new state is AMQP_MANAGEMENT_STATE_ERROR, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_ERROR]
-		else if (new_amqp_management_state == AMQP_MANAGEMENT_STATE_ERROR)
-		{
-			update_state(instance, AMQP_CONNECTION_STATE_ERROR);
-		}
-	}
-}
-
 static int create_cbs_handle(AMQP_CONNECTION_INSTANCE* instance)
 {
 	int result;
 
-	// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_029: [`instance->cbs_handle` shall be created using cbs_create(), passing `instance->session_handle` and `on_cbs_state_changed` callback]
+	// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_029: [`instance->cbs_handle` shall be created using cbs_create(), passing `instance->session_handle`]
 	if ((instance->cbs_handle = cbs_create(instance->session_handle, NULL, (void*)instance)) == NULL)
 	{
 		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_030: [If cbs_create() fails, amqp_connection_create() shall fail and return NULL]

@@ -63,7 +63,7 @@ TRANSPORT_LL_HANDLE IoTHubTransport_AMQP_Common_Create(const IOTHUBTRANSPORT_CON
 ```
 
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_001: [**If `config` or `config->upperConfig` or `get_io_transport` are NULL then IoTHubTransport_AMQP_Common_Create shall fail and return NULL.**]**
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_002: [**IoTHubTransport_AMQP_Common_Create shall fail and return NULL if any fields of the `config->upperConfig` structure are NULL.**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_002: [**IoTHubTransport_AMQP_Common_Create shall fail and return NULL if `config->upperConfig->protocol` is NULL**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_003: [**Memory shall be allocated for the transport's internal state structure (`instance`)**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_004: [**If malloc() fails, IoTHubTransport_AMQP_Common_Create shall fail and return NULL**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_005: [**If `config->upperConfig->protocolGatewayHostName` is NULL, `instance->iothub_target_fqdn` shall be set as `config->upperConfig->iotHubName` + "." + `config->upperConfig->iotHubSuffix`**]**
@@ -95,9 +95,9 @@ This function will close connection established through AMQP API, as well as des
 void IoTHubTransport_AMQP_Common_DoWork(TRANSPORT_LL_HANDLE handle, IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle)
 ```  
 
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_016: [**If `handle` is NULL, IoTHubTransport_AMQP_Common_DoWork shall fail and return**]**
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_017: [**If the transport state has a faulty connection state, IoTHubTransport_AMQP_Common_DoWork shall trigger the connection-retry logic and return**]**
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_018: [**If there are no devices registered on the transport, IoTHubTransport_AMQP_Common_DoWork shall skip do_work for **]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_016: [**If `handle` is NULL, IoTHubTransport_AMQP_Common_DoWork shall return without doing any work**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_017: [**If `instance->is_connection_retry_required` is true, IoTHubTransport_AMQP_Common_DoWork shall trigger the connection-retry logic and return**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_018: [**If there are no devices registered on the transport, IoTHubTransport_AMQP_Common_DoWork shall skip do_work for devices**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_019: [**If `instance->amqp_connection` is NULL, it shall be established**]**
 Note: see section "Connection Establishment" below.
 
@@ -113,16 +113,19 @@ Note: see section "Per-Device DoWork Requirements" below.
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_023: [**If `instance->tls_io` is NULL, it shall be set invoking instance->underlying_io_transport_provider()**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_024: [**If instance->underlying_io_transport_provider() fails, IoTHubTransport_AMQP_Common_DoWork shall fail and return**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_025: [**When `instance->tls_io` is created, it shall be set with `instance->saved_tls_options` using OptionHandler_FeedOptions()**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_111: [**If OptionHandler_FeedOptions() fails, it shall be ignored**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_026: [**If `transport->connection` is NULL, it shall be created using amqp_connection_create()**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_027: [**If `transport->preferred_authentication_method` is CBS, AMQP_CONNECTION_CONFIG shall be set with `create_sasl_io` = true and `create_cbs_connection` = true**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_028: [**If `transport->preferred_credential_method` is X509, AMQP_CONNECTION_CONFIG shall be set with `create_sasl_io` = false and `create_cbs_connection` = false**]**
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_029: [**`instance->logtrace` shall be set into `AMQP_CONNECTION_CONFIG->logtrace`**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_029: [**`instance->is_trace_on` shall be set into `AMQP_CONNECTION_CONFIG->is_trace_on`**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_030: [**If amqp_connection_create() fails, IoTHubTransport_AMQP_Common_DoWork shall fail and return**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_110: [**If amqp_connection_create() succeeds, IoTHubTransport_AMQP_Common_DoWork shall proceed to invoke amqp_connection_do_work**]**
+
 
 
 #### Connection-Retry Logic
 
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_031: [**device_stop() shall be invoked on all `instance->registered_devices`**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_031: [**device_stop() shall be invoked on all `instance->registered_devices` that are not already stopped**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_032: [** Each `instance->registered_devices` shall unsubscribe from receiving C2D method requests by calling `iothubtransportamqp_methods_unsubscribe`**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_033: [**`instance->connection` shall be destroyed using amqp_connection_destroy()**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_034: [**`instance->tls_io` options shall be saved on `instance->saved_tls_options` using xio_retrieveoptions()**]**
@@ -147,7 +150,7 @@ Note: all the components above will be re-created and re-started on the next cal
 ##### DEVICE_HANDLE Error Control
 
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_043: [**If the device handle is in state DEVICE_STATE_STARTING or DEVICE_STATE_STOPPING, it shall be checked for state change timeout**]**
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_044: [**If the device times out completing starting or stopping, the registered device shall be marked with failure**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_044: [**If the device times out in state DEVICE_STATE_STARTING or DEVICE_STATE_STOPPING, the registered device shall be marked with failure**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_045: [**If the registered device has a failure, it shall be stopped using device_stop()**]**
 Note: this will cause the device to be restarted on the next call to DoWork.
 
@@ -160,9 +163,9 @@ Note: this will cause the device to be restarted on the next call to DoWork.
 
 ##### Send pending events
 
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_047: [**If the registered device is started, each event on `registered_device->wait_to_send_list` shall be sent using device_send_event_async()**]**
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_048: [**device_send_event_async() shall be invoked with `on_event_send_complete`**]**
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_049: [**If device_send_event_async() fails, the function shall shall invoke `on_event_send_complete` with EVENT_SEND_COMPLETE_RESULT_ERROR_FAIL_SENDING and return**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_047: [**If the registered device is started, each event on `registered_device->wait_to_send_list` shall be removed from the list and sent using device_send_event_async()**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_048: [**device_send_event_async() shall be invoked passing `on_event_send_complete`**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_049: [**If device_send_event_async() fails, `on_event_send_complete` shall be invoked passing EVENT_SEND_COMPLETE_RESULT_ERROR_FAIL_SENDING and return**]**
 
 
 ###### on_event_send_complete
@@ -248,9 +251,9 @@ void IoTHubTransport_AMQP_Common_Unregister(IOTHUB_DEVICE_HANDLE deviceHandle)
 
 This function is intended to remove a device if it is registered with the transport.  
 
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_079: [**if `deviceHandle` provided is NULL, IoTHubTransport_AMQP_Common_Unregister shall fail and return.**]**
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_080: [**if `deviceHandle` has a NULL reference to its transport instance, IoTHubTransport_AMQP_Common_Unregister shall fail and return.**]**
-**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_081: [**If the device is not registered with this transport, IoTHubTransport_AMQP_Common_Unregister shall fail and return**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_079: [**if `deviceHandle` provided is NULL, IoTHubTransport_AMQP_Common_Unregister shall return.**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_080: [**if `deviceHandle` has a NULL reference to its transport instance, IoTHubTransport_AMQP_Common_Unregister shall return.**]**
+**SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_081: [**If the device is not registered with this transport, IoTHubTransport_AMQP_Common_Unregister shall return**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_082: [**`device_instance` shall be removed from `instance->registered_devices`**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_01_012: [**IoTHubTransport_AMQP_Common_Unregister shall destroy the C2D methods handler by calling iothubtransportamqp_methods_destroy**]**
 **SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_083: [**IoTHubTransport_AMQP_Common_Unregister shall free all the memory allocated for the `device_instance`**]**

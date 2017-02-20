@@ -1997,7 +1997,6 @@ TEST_FUNCTION(messenger_send_async_NULL_message)
 	device_destroy(handle);
 }
 
-
 // Tests_SRS_DEVICE_09_053: [If `send_task` fails to be created, device_send_event_async shall return a non-zero value]
 // Tests_SRS_DEVICE_09_056: [If messenger_send_async fails, device_send_event_async shall return a non-zero value]
 // Tests_SRS_DEVICE_09_057: [If any failures occur, device_send_event_async shall release all memory it has allocated]
