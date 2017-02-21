@@ -153,30 +153,35 @@ static int create_connection_handle(AMQP_CONNECTION_INSTANCE* instance)
 		connection_io_transport = instance->underlying_io_transport;
 	}
 
-	if ((unique_container_id = (char*)malloc(sizeof(char) * DEFAULT_UNIQUE_ID_LENGTH)) == NULL)
+	if ((unique_container_id = (char*)malloc(sizeof(char) * DEFAULT_UNIQUE_ID_LENGTH + 1)) == NULL)
 	{
 		result = __LINE__;
 		LogError("Failed creating the AMQP connection (failed creating unique ID container)");
 	}
-	else if (UniqueId_Generate(unique_container_id, DEFAULT_UNIQUE_ID_LENGTH) != UNIQUEID_OK)
-	{
-		result = __FAILURE__;
-		LogError("Failed creating the AMQP connection (UniqueId_Generate failed)");
-	}
-	// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_019: [`instance->connection_handle` shall be created using connection_create2(), passing the `connection_underlying_io`, `instance->iothub_host_fqdn` and an unique string as container ID]
-	// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_020: [connection_create2() shall also receive `on_connection_state_changed` and `on_connection_error` callback functions]
-	else if ((instance->connection_handle = connection_create2(connection_io_transport, STRING_c_str(instance->iothub_fqdn), unique_container_id, NULL, NULL, on_connection_state_changed, (void*)instance, on_connection_io_error, (void*)instance)) == NULL)
-	{
-		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_021: [If connection_create2() fails, amqp_connection_create() shall fail and return NULL]
-		result = __FAILURE__;
-		LogError("Failed creating the AMQP connection (connection_create2 failed)");
-	}
 	else
 	{
-		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_023: [The connection tracing shall be set using connection_set_trace(), passing `instance->is_trace_on`]
-		connection_set_trace(instance->connection_handle, instance->is_trace_on);
+		memset(unique_container_id, 0, sizeof(char) * DEFAULT_UNIQUE_ID_LENGTH + 1);
 
-		result = RESULT_OK;
+		if (UniqueId_Generate(unique_container_id, DEFAULT_UNIQUE_ID_LENGTH) != UNIQUEID_OK)
+		{
+			result = __FAILURE__;
+			LogError("Failed creating the AMQP connection (UniqueId_Generate failed)");
+		}
+		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_019: [`instance->connection_handle` shall be created using connection_create2(), passing the `connection_underlying_io`, `instance->iothub_host_fqdn` and an unique string as container ID]
+		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_020: [connection_create2() shall also receive `on_connection_state_changed` and `on_connection_error` callback functions]
+		else if ((instance->connection_handle = connection_create2(connection_io_transport, STRING_c_str(instance->iothub_fqdn), unique_container_id, NULL, NULL, on_connection_state_changed, (void*)instance, on_connection_io_error, (void*)instance)) == NULL)
+		{
+			// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_021: [If connection_create2() fails, amqp_connection_create() shall fail and return NULL]
+			result = __FAILURE__;
+			LogError("Failed creating the AMQP connection (connection_create2 failed)");
+		}
+		else
+		{
+			// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_023: [The connection tracing shall be set using connection_set_trace(), passing `instance->is_trace_on`]
+			connection_set_trace(instance->connection_handle, instance->is_trace_on);
+
+			result = RESULT_OK;
+		}
 	}
 
 	if (unique_container_id != NULL)
