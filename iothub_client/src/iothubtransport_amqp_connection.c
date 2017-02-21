@@ -108,8 +108,18 @@ static void on_connection_state_changed(void* context, CONNECTION_STATE new_conn
 	// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_063: [If `on_connection_state_changed` is called back, `instance->on_state_changed_callback` shall be invoked, if defined, only if the new state is different than the previous]
 	if (new_connection_state != previous_connection_state)
 	{
+		if (instance->cbs_handle == NULL || instance->sasl_io == NULL)
+		{
+			// connection is using x509 authentication.
+			// At this point uamqp's connection only raises CONNECTION_STATE_START when using X509 auth.
+			// So that should be all we expect to consider the amqp_connection_handle opened.
+			if (new_connection_state == CONNECTION_STATE_START)
+			{
+				update_state(instance, AMQP_CONNECTION_STATE_OPENED);
+			}
+		}
 		// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_064: [If `on_connection_state_changed` new state is CONNECTION_STATE_OPENED, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_OPENED]
-		if (new_connection_state == CONNECTION_STATE_OPENED)
+		else if (new_connection_state == CONNECTION_STATE_OPENED)
 		{
 			update_state(instance, AMQP_CONNECTION_STATE_OPENED);
 		}
@@ -366,6 +376,8 @@ AMQP_CONNECTION_HANDLE amqp_connection_create(AMQP_CONNECTION_CONFIG* config)
 				}
 				else
 				{
+					
+
 					// Codes_SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_034: [If no failures occur, amqp_connection_create() shall return the handle to the connection state]
 					result = (AMQP_CONNECTION_HANDLE)instance;
 				}

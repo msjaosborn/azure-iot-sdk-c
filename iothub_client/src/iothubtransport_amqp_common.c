@@ -518,6 +518,8 @@ static int establish_amqp_connection(AMQP_TRANSPORT_INSTANCE* transport_instance
 		}
 		// If new AMQP_TRANSPORT_AUTHENTICATION_MODE values are added, they need to be covered here.
 
+		transport_instance->amqp_connection_state = AMQP_CONNECTION_STATE_CLOSED;
+
 		// Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_026: [If `transport->connection` is NULL, it shall be created using amqp_connection_create()]
 		if ((transport_instance->amqp_connection = amqp_connection_create(&amqp_connection_config)) == NULL)
 		{
@@ -528,7 +530,6 @@ static int establish_amqp_connection(AMQP_TRANSPORT_INSTANCE* transport_instance
 		else
 		{
 			// Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_110: [If amqp_connection_create() succeeds, IoTHubTransport_AMQP_Common_DoWork shall proceed to invoke amqp_connection_do_work]
-			transport_instance->amqp_connection_state = AMQP_CONNECTION_STATE_CLOSED;
 			result = RESULT_OK;
 		}
 	}
