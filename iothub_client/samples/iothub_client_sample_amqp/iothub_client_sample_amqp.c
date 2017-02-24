@@ -18,13 +18,13 @@
 /*String containing Hostname, Device Id & Device Key in the format:                         */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessKey=<device_key>"                */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessSignature=<device_sas_token>"    */
-static const char* connectionString = "[device connection string]";
+static const char* connectionString = "";
 
 static int callbackCounter;
 static bool g_continueRunning;
 static char msgText[1024];
 static char propText[1024];
-#define MESSAGE_COUNT       5
+#define MESSAGE_COUNT       300
 #define DOWORK_LOOP_NUM     3
 
 
@@ -175,10 +175,10 @@ void iothub_client_sample_amqp_run(void)
                 (void)printf("IoTHubClient_SetMessageCallback...successful.\r\n");
 
                 /* Now that we are ready to receive commands, let's send some messages */
-                size_t iterator = 0;
+                size_t iterator = 0, n = 0;
                 do
                 {
-                    if (iterator < MESSAGE_COUNT)
+                    if (n%1000 == 0 && iterator < MESSAGE_COUNT)
                     {
                         sprintf_s(msgText, sizeof(msgText), "{\"deviceId\":\"myFirstDevice\",\"windSpeed\":%.2f}", avgWindSpeed + (rand() % 4 + 2));
                         if ((messages[iterator].messageHandle = IoTHubMessage_CreateFromByteArray((const unsigned char*)msgText, strlen(msgText))) == NULL)
@@ -205,11 +205,13 @@ void iothub_client_sample_amqp_run(void)
                                 (void)printf("IoTHubClient_SendEventAsync accepted data for transmission to IoT Hub.\r\n");
                             }
                         }
+
+						iterator++;
                     }
                     IoTHubClient_LL_DoWork(iotHubClientHandle);
                     ThreadAPI_Sleep(1);
 
-                    iterator++;
+					n++;
                 } while (g_continueRunning);
 
                 (void)printf("iothub_client_sample_amqp has gotten quit message, call DoWork %d more time to complete final sending...\r\n", DOWORK_LOOP_NUM);

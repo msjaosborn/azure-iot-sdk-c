@@ -81,15 +81,16 @@ typedef struct AMQP_TRANSPORT_DEVICE_INSTANCE_TAG
 	PDLIST_ENTRY waiting_to_send;                                       // List of events waiting to be sent to the iot hub (i.e., haven't been processed by the transport yet).
 	DEVICE_STATE device_state;                                          // Current state of the device_handle instance.
 	size_t number_of_previous_failures;                                 // Number of times the device has failed in sequence; this value is reset to 0 if device succeeds to authenticate, send and/or recv messages.
+	size_t number_of_send_event_complete_failures;                      // Number of times on_event_send_complete was called in row with an error.
 	time_t time_of_last_state_change;                                   // Time the device_handle last changed state; used to track timeouts of device_start_async and device_stop.
 	unsigned int max_state_change_timeout_secs;                         // Maximum number of seconds allowed for device_handle to complete start and stop state changes.
 #ifdef WIP_C2D_METHODS_AMQP /* This feature is WIP, do not use yet */
     // the methods portion
     IOTHUBTRANSPORT_AMQP_METHODS_HANDLE methods_handle;                 // Handle to instance of module that deals with device methods for AMQP.
     // is subscription for methods needed?
-    int subscribe_methods_needed;                                       // Indicates if should subscribe for device methods.
+    bool subscribe_methods_needed;                                       // Indicates if should subscribe for device methods.
     // is the transport subscribed for methods?
-    int subscribed_for_methods;                                         // Indicates if device is subscribed for device methods.
+    bool subscribed_for_methods;                                         // Indicates if device is subscribed for device methods.
 #endif
 } AMQP_TRANSPORT_DEVICE_INSTANCE;
 
@@ -553,6 +554,9 @@ static void prepare_device_for_connection_retry(AMQP_TRANSPORT_DEVICE_INSTANCE* 
 			LogError("Failed preparing device '%s' for connection retry (device_stop failed)", STRING_c_str(registered_device->device_id));
 		}
 	}
+
+	registered_device->number_of_previous_failures = 0;
+	registered_device->number_of_send_event_complete_failures = 0;
 }
 
 static void prepare_for_connection_retry(AMQP_TRANSPORT_INSTANCE* transport_instance)
@@ -680,7 +684,16 @@ static IOTHUB_CLIENT_CONFIRMATION_RESULT get_iothub_client_confirmation_result_f
 //     Callback function for device_send_event_async.
 static void on_event_send_complete(IOTHUB_MESSAGE_LIST* message, D2C_EVENT_SEND_RESULT result, void* context)
 {
-	(void)context;
+	AMQP_TRANSPORT_DEVICE_INSTANCE* registered_device = (AMQP_TRANSPORT_DEVICE_INSTANCE*)context;
+
+	if (result != D2C_EVENT_SEND_COMPLETE_RESULT_OK && result != D2C_EVENT_SEND_COMPLETE_RESULT_DEVICE_DESTROYED)
+	{
+		registered_device->number_of_send_event_complete_failures++;
+	}
+	else
+	{
+		registered_device->number_of_send_event_complete_failures = 0;
+	}
 
 	// Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_056: [If `message->callback` is not NULL, it shall invoked with the `iothub_send_result`]
 	if (message->callback != NULL)
@@ -825,8 +838,8 @@ static int IoTHubTransport_AMQP_Common_Device_DoWork(AMQP_TRANSPORT_DEVICE_INSTA
 	}
 #ifdef WIP_C2D_METHODS_AMQP /* This feature is WIP, do not use yet */
 	// Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_01_031: [ Once the device is authenticated, `iothubtransportamqp_methods_subscribe` shall be invoked (subsequent DoWork calls shall not call it if already subscribed). ]
-	else if (registered_device->subscribe_methods_needed == 1 &&
-		registered_device->subscribed_for_methods == 0 &&
+	else if (registered_device->subscribe_methods_needed &&
+		!registered_device->subscribed_for_methods &&
 		subscribe_methods(registered_device) != RESULT_OK)
 	{
 		LogError("Failed performing DoWork for device '%s' (failed registering for device methods)", STRING_c_str(registered_device->device_id));
@@ -1115,7 +1128,6 @@ void IoTHubTransport_AMQP_Common_DoWork(TRANSPORT_LL_HANDLE handle, IOTHUB_CLIEN
     } 
     else
     {
-        bool trigger_connection_retry = false;
         AMQP_TRANSPORT_INSTANCE* transport_instance = (AMQP_TRANSPORT_INSTANCE*)handle;
 		LIST_ITEM_HANDLE list_item;
 
@@ -1125,6 +1137,8 @@ void IoTHubTransport_AMQP_Common_DoWork(TRANSPORT_LL_HANDLE handle, IOTHUB_CLIEN
 			LogError("An error occured on AMQP connection. The connection will be restablished.");
 
 			prepare_for_connection_retry(transport_instance);
+
+			transport_instance->is_connection_retry_required = false;
 		}
 		// Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_018: [If there are no devices registered on the transport, IoTHubTransport_AMQP_Common_DoWork shall skip do_work for devices]
 		else if ((list_item = singlylinkedlist_get_head_item(transport_instance->registered_devices)) != NULL)
@@ -1136,7 +1150,6 @@ void IoTHubTransport_AMQP_Common_DoWork(TRANSPORT_LL_HANDLE handle, IOTHUB_CLIEN
 			if (transport_instance->amqp_connection == NULL && establish_amqp_connection(transport_instance) != RESULT_OK)
 			{
 				LogError("AMQP transport failed to establish connection with service.");
-				trigger_connection_retry = true;
 			}
 			// Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_020: [If the amqp_connection is OPENED, the transport shall iterate through each registered device and perform a device-specific do_work on each]
 			else if (transport_instance->amqp_connection_state == AMQP_CONNECTION_STATE_OPENED)
@@ -1149,12 +1162,18 @@ void IoTHubTransport_AMQP_Common_DoWork(TRANSPORT_LL_HANDLE handle, IOTHUB_CLIEN
 					{
 						LogError("Transport had an unexpected failure during DoWork (failed to fetch a registered_devices list item value)");
 					}
+					else if (registered_device->number_of_send_event_complete_failures >= MAX_NUMBER_OF_DEVICE_FAILURES)
+					{
+						LogError("Device '%s' reported a critical failure (events completed sending with failures); connection retry will be triggered.", STRING_c_str(registered_device->device_id));
+
+						transport_instance->is_connection_retry_required = true;
+					}
 					else if (IoTHubTransport_AMQP_Common_Device_DoWork(registered_device) != RESULT_OK)
 					{
 						// Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_021: [If DoWork fails for the registered device for more than MAX_NUMBER_OF_DEVICE_FAILURES, connection retry shall be triggered]
 						if (registered_device->number_of_previous_failures >= MAX_NUMBER_OF_DEVICE_FAILURES)
 						{
-							LogError("Device '%s' reported a critical failure; connection retry will be triggered.");
+							LogError("Device '%s' reported a critical failure; connection retry will be triggered.", STRING_c_str(registered_device->device_id));
 
 							transport_instance->is_connection_retry_required = true;
 						}
@@ -1294,8 +1313,9 @@ void IoTHubTransport_AMQP_Common_Unsubscribe_DeviceMethod(IOTHUB_DEVICE_HANDLE h
         if (device_state->subscribe_methods_needed)
         {
             /* Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_01_007: [ `IoTHubTransport_AMQP_Common_Unsubscribe_DeviceMethod` shall unsubscribe from receiving C2D method requests by calling `iothubtransportamqp_methods_unsubscribe`. ]*/
-            device_state->subscribed_for_methods = false;
-            iothubtransportamqp_methods_unsubscribe(device_state->methods_handle);
+			device_state->subscribed_for_methods = false;
+			device_state->subscribe_methods_needed = false;
+			iothubtransportamqp_methods_unsubscribe(device_state->methods_handle);
         }
 #else
         LogError("Not implemented");
@@ -1566,8 +1586,8 @@ IOTHUB_DEVICE_HANDLE IoTHubTransport_AMQP_Common_Register(TRANSPORT_LL_HANDLE ha
 				amqp_device_instance->max_state_change_timeout_secs = DEFAULT_DEVICE_STATE_CHANGE_TIMEOUT_SECS;
      
 #ifdef WIP_C2D_METHODS_AMQP /* This feature is WIP, do not use yet */
-                amqp_device_instance->subscribe_methods_needed = 0;
-                amqp_device_instance->subscribed_for_methods = 0;
+                amqp_device_instance->subscribe_methods_needed = false;
+                amqp_device_instance->subscribed_for_methods = false;
 #endif
 				// Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_069: [A copy of `config->deviceId` shall be saved into `device_state->device_id`]
                 if ((amqp_device_instance->device_id = STRING_construct(device->deviceId)) == NULL)

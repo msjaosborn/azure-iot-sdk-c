@@ -68,7 +68,7 @@ typedef struct MESSENGER_INSTANCE_TAG
 	time_t last_message_receiver_state_change_time;
 } MESSENGER_INSTANCE;
 
-typedef struct SEND_EVENT_TASK_TAG
+typedef struct MESSENGER_SEND_EVENT_TASK_TAG
 {
 	IOTHUB_MESSAGE_LIST* message;
 	ON_MESSENGER_EVENT_SEND_COMPLETE on_event_send_complete_callback;
@@ -76,7 +76,7 @@ typedef struct SEND_EVENT_TASK_TAG
 	time_t send_time;
 	MESSENGER_INSTANCE *messenger;
 	bool is_timed_out;
-} SEND_EVENT_TASK;
+} MESSENGER_SEND_EVENT_TASK;
 
 // @brief
 //     Evaluates if the ammount of time since start_time is greater or lesser than timeout_in_secs.
@@ -330,8 +330,8 @@ static void destroy_event_sender(MESSENGER_INSTANCE* instance)
 		// Codes_SRS_IOTHUBTRANSPORT_AMQP_MESSENGER_09_060: [`instance->message_sender` shall be destroyed using messagesender_destroy()]
 		messagesender_destroy(instance->message_sender);
 		instance->message_sender = NULL;
-		instance->message_receiver_current_state = MESSAGE_RECEIVER_STATE_IDLE;
-		instance->message_receiver_previous_state = MESSAGE_RECEIVER_STATE_IDLE;
+		instance->message_sender_current_state = MESSAGE_RECEIVER_STATE_IDLE;
+		instance->message_sender_previous_state = MESSAGE_RECEIVER_STATE_IDLE;
 		instance->last_message_sender_state_change_time = INDEFINITE_TIME;
 	}
 
@@ -693,7 +693,7 @@ static int create_message_receiver(MESSENGER_INSTANCE* instance)
 	return result;
 }
 
-static int move_event_to_in_progress_list(SEND_EVENT_TASK* task)
+static int move_event_to_in_progress_list(MESSENGER_SEND_EVENT_TASK* task)
 {
 	int result; 
 
@@ -710,14 +710,14 @@ static int move_event_to_in_progress_list(SEND_EVENT_TASK* task)
 	return result;
 }
 
-static bool find_send_event_task_on_list(LIST_ITEM_HANDLE list_item, const void* match_context)
+static bool find_MESSENGER_SEND_EVENT_TASK_on_list(LIST_ITEM_HANDLE list_item, const void* match_context)
 {
 	return (list_item != NULL && singlylinkedlist_item_get_value(list_item) == match_context);
 }
 
-static void remove_event_from_in_progress_list(SEND_EVENT_TASK *task)
+static void remove_event_from_in_progress_list(MESSENGER_SEND_EVENT_TASK *task)
 {
-	LIST_ITEM_HANDLE list_item = singlylinkedlist_find(task->messenger->in_progress_list, find_send_event_task_on_list, (void*)task);
+	LIST_ITEM_HANDLE list_item = singlylinkedlist_find(task->messenger->in_progress_list, find_MESSENGER_SEND_EVENT_TASK_on_list, (void*)task);
 
 	if (list_item != NULL)
 	{
@@ -738,7 +738,7 @@ static int copy_events_to_list(SINGLYLINKEDLIST_HANDLE from_list, SINGLYLINKEDLI
 
 	while (list_item != NULL)
 	{
-		SEND_EVENT_TASK *task = (SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_item);
+		MESSENGER_SEND_EVENT_TASK *task = (MESSENGER_SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_item);
 
 		if (singlylinkedlist_add(to_list, task) == NULL)
 		{
@@ -833,7 +833,7 @@ static void internal_on_event_send_complete_callback(void* context, MESSAGE_SEND
 { 
 	if (context != NULL)
 	{
-		SEND_EVENT_TASK* task = (SEND_EVENT_TASK*)context;
+		MESSENGER_SEND_EVENT_TASK* task = (MESSENGER_SEND_EVENT_TASK*)context;
 
 		if (task->is_timed_out == false)
 		{
@@ -865,9 +865,9 @@ static void internal_on_event_send_complete_callback(void* context, MESSAGE_SEND
 	}
 }
 
-static SEND_EVENT_TASK* get_next_event_to_send(MESSENGER_INSTANCE* instance)
+static MESSENGER_SEND_EVENT_TASK* get_next_event_to_send(MESSENGER_INSTANCE* instance)
 {
-	SEND_EVENT_TASK* task;
+	MESSENGER_SEND_EVENT_TASK* task;
 	LIST_ITEM_HANDLE list_item;
 
 	if ((list_item = singlylinkedlist_get_head_item(instance->waiting_to_send)) == NULL)
@@ -876,7 +876,7 @@ static SEND_EVENT_TASK* get_next_event_to_send(MESSENGER_INSTANCE* instance)
 	}
 	else
 	{
-		task = (SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_item);
+		task = (MESSENGER_SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_item);
 
 		if (singlylinkedlist_remove(instance->waiting_to_send, list_item) != RESULT_OK)
 		{
@@ -891,7 +891,7 @@ static int send_pending_events(MESSENGER_INSTANCE* instance)
 {
 	int result = RESULT_OK;
 
-	SEND_EVENT_TASK* task;
+	MESSENGER_SEND_EVENT_TASK* task;
 
 	while ((task = get_next_event_to_send(instance)) != NULL)
 	{
@@ -968,7 +968,7 @@ static int process_event_send_timeouts(MESSENGER_INSTANCE* instance)
 
 		while (list_item != NULL)
 		{
-			SEND_EVENT_TASK* task = (SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_item);
+			MESSENGER_SEND_EVENT_TASK* task = (MESSENGER_SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_item);
 
 			if (task->is_timed_out == false)
 			{
@@ -1008,7 +1008,7 @@ static void remove_timed_out_events(MESSENGER_INSTANCE* instance)
 
 	while (list_item != NULL)
 	{
-		SEND_EVENT_TASK* task = (SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_item);
+		MESSENGER_SEND_EVENT_TASK* task = (MESSENGER_SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_item);
 
 		if (task->is_timed_out == true)
 		{
@@ -1182,11 +1182,11 @@ int messenger_send_async(MESSENGER_HANDLE messenger_handle, IOTHUB_MESSAGE_LIST*
 	}
 	else
 	{
-		SEND_EVENT_TASK *task;
+		MESSENGER_SEND_EVENT_TASK *task;
 		MESSENGER_INSTANCE *instance = (MESSENGER_INSTANCE*)messenger_handle;
 
-		// Codes_SRS_IOTHUBTRANSPORT_AMQP_MESSENGER_09_137: [messenger_send_async() shall allocate memory for a SEND_EVENT_TASK structure (aka `task`)]  
-		if ((task = (SEND_EVENT_TASK*)malloc(sizeof(SEND_EVENT_TASK))) == NULL)
+		// Codes_SRS_IOTHUBTRANSPORT_AMQP_MESSENGER_09_137: [messenger_send_async() shall allocate memory for a MESSENGER_SEND_EVENT_TASK structure (aka `task`)]  
+		if ((task = (MESSENGER_SEND_EVENT_TASK*)malloc(sizeof(MESSENGER_SEND_EVENT_TASK))) == NULL)
 		{
 			// Codes_SRS_IOTHUBTRANSPORT_AMQP_MESSENGER_09_138: [If malloc() fails, messenger_send_async() shall fail and return a non-zero value]
 			LogError("Failed sending event (failed to create struct for task; malloc failed)");
@@ -1205,7 +1205,7 @@ int messenger_send_async(MESSENGER_HANDLE messenger_handle, IOTHUB_MESSAGE_LIST*
 		}
 		else
 		{
-			memset(task, 0, sizeof(SEND_EVENT_TASK));
+			memset(task, 0, sizeof(MESSENGER_SEND_EVENT_TASK));
 			task->message = message;
 			task->on_event_send_complete_callback = on_messenger_event_send_complete_callback;
 			task->context = context;
@@ -1515,7 +1515,7 @@ void messenger_destroy(MESSENGER_HANDLE messenger_handle)
 		//       but we need to iterate through in case any events failed to be moved.
 		while ((list_node = singlylinkedlist_get_head_item(instance->in_progress_list)) != NULL)
 		{
-			SEND_EVENT_TASK* task = (SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_node);
+			MESSENGER_SEND_EVENT_TASK* task = (MESSENGER_SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_node);
 
 			(void)singlylinkedlist_remove(instance->in_progress_list, list_node);
 
@@ -1528,7 +1528,7 @@ void messenger_destroy(MESSENGER_HANDLE messenger_handle)
 
 		while ((list_node = singlylinkedlist_get_head_item(instance->waiting_to_send)) != NULL)
 		{
-			SEND_EVENT_TASK* task = (SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_node);
+			MESSENGER_SEND_EVENT_TASK* task = (MESSENGER_SEND_EVENT_TASK*)singlylinkedlist_item_get_value(list_node);
 
 			(void)singlylinkedlist_remove(instance->waiting_to_send, list_node);
 

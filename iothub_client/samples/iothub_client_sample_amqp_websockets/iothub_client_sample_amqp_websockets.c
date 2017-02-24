@@ -12,7 +12,7 @@
 #include "iothubtransportamqp_websockets.h"
 #include "../../../certs/certs.h"
 
-static const char* connectionString = "[device connection string]";
+static const char* connectionString = "";
 static int callbackCounter;
 
 
@@ -111,7 +111,7 @@ static void SendConfirmationCallback(IOTHUB_CLIENT_CONFIRMATION_RESULT result, v
 
 static char msgText[1024];
 static char propText[1024];
-#define MESSAGE_COUNT 5
+#define MESSAGE_COUNT 60
 
 void iothub_client_sample_amqp_websockets_run(void)
 {
@@ -138,6 +138,11 @@ void iothub_client_sample_amqp_websockets_run(void)
     }
     else
     {
+		bool logtrace = true;
+		(void)IoTHubClient_SetOption(iotHubClientHandle, "logtrace", &logtrace);
+		unsigned int timeout = 10;
+		(void)IoTHubClient_SetOption(iotHubClientHandle, "event_send_timeout_secs", &timeout);
+
         // For mbed add the certificate information
         if (IoTHubClient_SetOption(iotHubClientHandle, "TrustedCerts", certificates) != IOTHUB_CLIENT_OK)
         {
@@ -181,6 +186,8 @@ void iothub_client_sample_amqp_websockets_run(void)
                         (void)printf("IoTHubClient_SendEventAsync accepted data for transmission to IoT Hub.\r\n");
                     }
                 }
+
+				ThreadAPI_Sleep(1000);
             }
 
             /* Wait for Commands. */

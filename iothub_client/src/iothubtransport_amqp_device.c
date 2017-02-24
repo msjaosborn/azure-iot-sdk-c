@@ -42,11 +42,11 @@ typedef struct DEVICE_INSTANCE_TAG
 	void* on_message_received_context;
 } DEVICE_INSTANCE;
 
-typedef struct SEND_EVENT_TASK_TAG
+typedef struct DEVICE_SEND_EVENT_TASK_TAG
 {
 	ON_DEVICE_D2C_EVENT_SEND_COMPLETE on_event_send_complete_callback;
 	void* on_event_send_complete_context;
-} SEND_EVENT_TASK;
+} DEVICE_SEND_EVENT_TASK;
 
 
 // Internal state control
@@ -142,7 +142,7 @@ static void on_event_send_complete_messenger_callback(IOTHUB_MESSAGE_LIST* iothu
 	}
 	else
 	{
-		SEND_EVENT_TASK* send_task = (SEND_EVENT_TASK*)context;
+		DEVICE_SEND_EVENT_TASK* send_task = (DEVICE_SEND_EVENT_TASK*)context;
 
 		// Codes_SRS_DEVICE_09_059: [If `ev_send_comp_result` is MESSENGER_EVENT_SEND_COMPLETE_RESULT_OK, D2C_EVENT_SEND_COMPLETE_RESULT_OK shall be reported as `event_send_complete`]
 		// Codes_SRS_DEVICE_09_060: [If `ev_send_comp_result` is MESSENGER_EVENT_SEND_COMPLETE_RESULT_ERROR_CANNOT_PARSE, D2C_EVENT_SEND_COMPLETE_RESULT_ERROR_CANNOT_PARSE shall be reported as `event_send_complete`]
@@ -856,10 +856,10 @@ int device_send_event_async(DEVICE_HANDLE handle, IOTHUB_MESSAGE_LIST* message, 
 	}
 	else
 	{
-		SEND_EVENT_TASK* send_task;
+		DEVICE_SEND_EVENT_TASK* send_task;
 
 		// Codes_SRS_DEVICE_09_052: [A structure (`send_task`) shall be created to track the send state of the message]
-		if ((send_task = (SEND_EVENT_TASK*)malloc(sizeof(SEND_EVENT_TASK))) == NULL)
+		if ((send_task = (DEVICE_SEND_EVENT_TASK*)malloc(sizeof(DEVICE_SEND_EVENT_TASK))) == NULL)
 		{
 			// Codes_SRS_DEVICE_09_053: [If `send_task` fails to be created, device_send_event_async shall return a non-zero value]
 			LogError("Failed sending event (failed creating task to send event)");
@@ -870,7 +870,7 @@ int device_send_event_async(DEVICE_HANDLE handle, IOTHUB_MESSAGE_LIST* message, 
 			DEVICE_INSTANCE* instance = (DEVICE_INSTANCE*)handle;
 
 			// Codes_SRS_DEVICE_09_054: [`send_task` shall contain the user callback and the context provided]
-			memset(send_task, 0, sizeof(SEND_EVENT_TASK));
+			memset(send_task, 0, sizeof(DEVICE_SEND_EVENT_TASK));
 			send_task->on_event_send_complete_callback = on_device_d2c_event_send_complete_callback;
 			send_task->on_event_send_complete_context = context;
 			
